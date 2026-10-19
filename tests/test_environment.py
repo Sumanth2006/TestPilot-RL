@@ -86,3 +86,59 @@ def test_invalid_budget_is_rejected():
 
     with pytest.raises(ValueError):
         TestingEnvironment(scenario, initial_budget=-1)
+
+
+def test_episode_ends_when_no_remaining_test_is_affordable():
+    env = make_environment(budget=2)
+
+    _, _, done, _ = env.step("T1")
+
+    # T1 costs 2; T2 costs 3, so no action remains affordable.
+    assert env.remaining_budget == 0
+    assert done is True
+    assert env.get_legal_actions() == []
+
+
+def test_duplicate_bug_does_not_earn_reward_twice():
+    env = make_environment(budget=5)
+
+    env.step("T1")  # Discovers B1.
+    _, reward, done, info = env.step("T2")
+
+    # T2 discovers B2, but B1 was already discovered.
+    assert info["new_bugs"] == {"B2"}
+    assert info["bugs_found"] == 1
+    assert done is True
+
+
+def test_feature_reward_counts_only_new_features():
+    env = make_environment(budget=5)
+
+    env.step("T1")  # Covers F1.
+    _, reward, _, info = env.step("T2")
+
+    # T2 covers F1 and F2; only F2 is new.
+    assert info["new_features"] == {"F2"}
+    assert info["features_added"] == 1
+
+
+def test_invalid_action_does_not_change_environment():
+    env = make_environment(budget=5)
+    state_before = env.get_state()
+
+    with pytest.raises(ValueError):
+        env.step("T999")
+
+    assert env.get_state() == state_before
+
+
+def test_reset_clears_previous_discoveries():
+    env = make_environment(budget=5)
+    env.step("T1")
+
+    env.reset()
+
+    assert env.discovered_bugs == set()
+    assert env.covered_features == set()
+    assert env.executed_tests == set()
+    assert env.remaining_budget == 5
