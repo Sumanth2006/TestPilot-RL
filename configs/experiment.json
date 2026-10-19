@@ -1,0 +1,20 @@
+{
+  "project_name": "TestPilot-RL",
+  "random_seed": 42,
+  "initial_budget": 20,
+  "num_tests": 20,
+  "num_features": 10,
+  "num_bugs": 10,
+  "reward": {
+    "bug_weight": 10.0,
+    "coverage_weight": 2.0,
+    "cost_weight": 1.0
+  },
+  "q_learning": {
+    "learning_rate": 0.1,
+    "discount_factor": 0.9,
+    "initial_epsilon": 1.0,
+    "minimum_epsilon": 0.05,
+    "epsilon_decay": 0.995
+  }
+}
