@@ -10,6 +10,7 @@ from src.baselines import (
     run_fixed_order_baseline,
     run_random_baseline,
 )
+from src.evaluation_report import generate_evaluation_report
 from src.q_learning import QLearningAgent
 from src.simulator import generate_scenario
 from src.training import train_agent
@@ -38,7 +39,7 @@ def run_experiment(
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    # Read reward weights and Q-learning hyperparameters.
+    # Load reward weights and Q-learning hyperparameters.
     with open(config_path, "r", encoding="utf-8") as file:
         config = json.load(file)
 
@@ -49,8 +50,9 @@ def run_experiment(
     coverage_weight = float(reward_config.get("coverage_weight", 2.0))
     cost_weight = float(reward_config.get("cost_weight", 1.0))
 
-    # Use independent, reproducible seeds for each scenario.
+    # Generate independent, reproducible scenario seeds.
     seed_rng = random.Random(seed)
+
     training_seeds = [
         seed_rng.randrange(1, 2**31)
         for _ in range(training_scenarios)
@@ -60,7 +62,7 @@ def run_experiment(
         for _ in range(evaluation_scenarios)
     ]
 
-    # Train on generated training scenarios only.
+    # Initialize the Q-learning agent from the configuration.
     agent = QLearningAgent(
         learning_rate=float(q_config.get("learning_rate", 0.1)),
         discount_factor=float(q_config.get("discount_factor", 0.9)),
@@ -72,6 +74,7 @@ def run_experiment(
 
     training_history: list[dict[str, Any]] = []
 
+    # Train only on the training scenarios.
     for scenario_seed in training_seeds:
         scenario = generate_scenario(
             num_tests=int(config.get("num_tests", 20)),
@@ -92,7 +95,7 @@ def run_experiment(
 
         training_history.extend(history)
 
-    # Evaluate every strategy on the same held-out scenarios.
+    # Evaluate all strategies on the same held-out scenarios.
     evaluation_rows: list[dict[str, Any]] = []
 
     for scenario_index, scenario_seed in enumerate(
@@ -105,8 +108,8 @@ def run_experiment(
             seed=scenario_seed,
         )
 
-        # Greedy evaluation: no epsilon exploration.
-        environment_results = _evaluate_q_learning(
+        # Greedy Q-learning evaluation: exploration is disabled.
+        q_results = _evaluate_q_learning(
             agent=agent,
             scenario=scenario,
             initial_budget=initial_budget,
@@ -132,11 +135,7 @@ def run_experiment(
             cost_weight=cost_weight,
         )
 
-        for result in (
-            environment_results,
-            random_results,
-            fixed_results,
-        ):
+        for result in (q_results, random_results, fixed_results):
             evaluation_rows.append(
                 {
                     "scenario_id": scenario_index,
@@ -145,7 +144,7 @@ def run_experiment(
                 }
             )
 
-    # Aggregate results across held-out scenarios.
+    # Calculate average performance for each strategy.
     strategies = ("q_learning", "random", "fixed_order")
     metric_names = (
         "bugs_found",
@@ -159,18 +158,20 @@ def run_experiment(
 
     for strategy in strategies:
         strategy_rows = [
-            row for row in evaluation_rows
+            row
+            for row in evaluation_rows
             if row["strategy"] == strategy
         ]
 
         summary[strategy] = {
             metric: round(
-                mean(float(row[metric]) for row in strategy_rows), 3
+                mean(float(row[metric]) for row in strategy_rows),
+                3,
             )
             for metric in metric_names
         }
 
-    # Save raw evaluation data and aggregate summaries.
+    # Save raw evaluation results.
     csv_path = output_path / "evaluation_results.csv"
 
     with open(csv_path, "w", newline="", encoding="utf-8") as file:
@@ -185,11 +186,14 @@ def run_experiment(
             "budget_used",
             "remaining_budget",
         ]
+
         writer = csv.DictWriter(file, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(evaluation_rows)
 
+    # Save the aggregate summary as JSON.
     summary_path = output_path / "summary.json"
+
     with open(summary_path, "w", encoding="utf-8") as file:
         json.dump(
             {
@@ -206,15 +210,25 @@ def run_experiment(
             indent=2,
         )
 
+    # Save the episode-by-episode training history.
     history_path = output_path / "training_history.csv"
+
     with open(history_path, "w", newline="", encoding="utf-8") as file:
         if training_history:
             writer = csv.DictWriter(
-                file, fieldnames=list(training_history[0].keys())
+                file,
+                fieldnames=list(training_history[0].keys()),
             )
             writer.writeheader()
             writer.writerows(training_history)
 
+    # Generate means, standard deviations, and comparison charts.
+    report_files = generate_evaluation_report(
+        evaluation_rows=evaluation_rows,
+        output_dir=str(output_path),
+    )
+
+    
     return {
         "summary": summary,
         "evaluation_rows": evaluation_rows,
@@ -223,8 +237,10 @@ def run_experiment(
             "evaluation": str(csv_path),
             "summary": str(summary_path),
             "training_history": str(history_path),
+            **report_files,
         },
     }
+
 
 
 def _evaluate_q_learning(
