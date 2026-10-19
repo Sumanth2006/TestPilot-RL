@@ -1,0 +1,255 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b1020">
+  <title>TestPilot-RL | Testing Intelligence</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#">
+        <span class="brand-icon">TP</span>
+        <span>TestPilot<span class="brand-light">-RL</span></span>
+      </a>
+
+      <div class="sidebar-label">WORKSPACE</div>
+      <a class="nav-item active" href="#overview"><span>◫</span> Overview</a>
+      <a class="nav-item" href="#experiments"><span>⚙</span> Experiments</a>
+      <a class="nav-item" href="#performance"><span>▥</span> Performance</a>
+
+      <div class="sidebar-bottom">
+        <div class="connection-indicator">
+          <span id="connectionDot" class="status-dot"></span>
+          <div>
+            <strong id="connectionText">Checking API...</strong>
+            <small>FastAPI backend</small>
+          </div>
+        </div>
+        <div class="sidebar-version">TESTPILOT-RL · v1.0</div>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div>
+          <div class="eyebrow">REINFORCEMENT LEARNING LAB</div>
+          <h1>Testing Intelligence</h1>
+          <p class="subtitle">Discover bugs efficiently with intelligent test selection.</p>
+        </div>
+        <button id="refreshButton" class="button button-secondary">↻ Refresh results</button>
+      </header>
+
+      <section id="overview" class="welcome-panel">
+        <div>
+          <span class="pill"><span class="status-dot"></span> EXPERIMENT WORKSPACE</span>
+          <h2>Make every test count.</h2>
+          <p>Compare a learned testing policy against random and fixed-order baselines under a limited test budget.</p>
+        </div>
+        <div class="welcome-symbol" aria-hidden="true">⌘</div>
+      </section>
+
+      <section class="section-block">
+        <div class="section-heading">
+          <div>
+            <h2>Evaluation overview</h2>
+            <p>Summary from the most recently completed experiment.</p>
+          </div>
+          <span id="resultLabel" class="small-label">Waiting for results</span>
+        </div>
+
+        <div class="metric-grid">
+          <article class="metric-card">
+            <div class="metric-top"><span>Bugs detected</span><span class="metric-icon purple">⌕</span></div>
+            <div id="bugsMetric" class="metric-value">—</div>
+            <div class="metric-description">Average bugs found per scenario</div>
+          </article>
+          <article class="metric-card">
+            <div class="metric-top"><span>Feature coverage</span><span class="metric-icon blue">◈</span></div>
+            <div id="coverageMetric" class="metric-value">—</div>
+            <div class="metric-description">Average features covered</div>
+          </article>
+          <article class="metric-card">
+            <div class="metric-top"><span>Tests executed</span><span class="metric-icon green">✓</span></div>
+            <div id="testsMetric" class="metric-value">—</div>
+            <div class="metric-description">Average tests executed per scenario</div>
+          </article>
+          <article class="metric-card">
+            <div class="metric-top"><span>Total reward</span><span class="metric-icon orange">✳</span></div>
+            <div id="rewardMetric" class="metric-value">—</div>
+            <div class="metric-description">Average cumulative reward</div>
+          </article>
+        </div>
+      </section>
+
+      <section id="experiments" class="section-block">
+        <div class="section-heading">
+          <div>
+            <h2>Run an experiment</h2>
+            <p>Configure the evaluation, then run all three strategies on the same evaluation scenarios.</p>
+          </div>
+        </div>
+
+        <div class="experiment-layout">
+          <form id="experimentForm" class="panel settings-panel">
+            <div class="panel-heading">
+              <div>
+                <h3>Experiment settings</h3>
+                <p>Choose your run configuration.</p>
+              </div>
+              <span class="settings-icon">⚙</span>
+            </div>
+
+            <label for="trainingScenarios">Training scenarios</label>
+            <input id="trainingScenarios" type="number" min="1" max="100" value="30" required>
+            <small class="field-help">Scenarios used to train the Q-learning agent.</small>
+
+            <label for="evaluationScenarios">Evaluation scenarios</label>
+            <input id="evaluationScenarios" type="number" min="1" max="500" value="50" required>
+            <small class="field-help">Held-out scenarios used to compare strategies.</small>
+
+            <label for="episodes">Episodes per training scenario</label>
+            <input id="episodes" type="number" min="1" max="5000" value="500" required>
+            <small class="field-help">More episodes generally require more computation.</small>
+
+            <label for="budget">Initial test budget</label>
+            <input id="budget" type="number" min="0" max="1000" value="20" required>
+            <small class="field-help">Maximum available budget in each evaluation scenario.</small>
+
+            <label for="seed">Random seed</label>
+            <input id="seed" type="number" min="0" max="2147483647" value="42" required>
+            <small class="field-help">Use the same seed to help reproduce a run.</small>
+
+            <button id="runButton" type="submit" class="button button-primary full-width">
+              <span id="runButtonText">▶ Run experiment</span>
+            </button>
+            <p class="form-note">Larger runs may take longer. Keep the API terminal open.</p>
+          </form>
+
+          <div class="panel run-info-panel">
+            <div class="panel-heading">
+              <div>
+                <h3>Execution status</h3>
+                <p id="runStatus">Ready to run an experiment.</p>
+              </div>
+              <span id="runStatusIcon" class="run-status-icon">●</span>
+            </div>
+
+            <div id="progressTrack" class="progress-track">
+              <div id="progressBar" class="progress-bar"></div>
+            </div>
+            <div id="progressText" class="progress-caption">No experiment running</div>
+
+            <div class="strategy-list">
+              <div class="strategy-item">
+                <span class="strategy-marker q-marker"></span>
+                <div><strong>Q-learning</strong><small>Learned action-selection policy</small></div>
+              </div>
+              <div class="strategy-item">
+                <span class="strategy-marker random-marker"></span>
+                <div><strong>Random baseline</strong><small>Random legal test selection</small></div>
+              </div>
+              <div class="strategy-item">
+                <span class="strategy-marker fixed-marker"></span>
+                <div><strong>Fixed-order baseline</strong><small>Predetermined test order</small></div>
+              </div>
+            </div>
+
+            <div class="notice">
+              <strong>Fair comparison</strong>
+              <p>All three strategies are evaluated using the experiment's shared evaluation scenarios and budget settings.</p>
+            </div>
+
+            <div id="errorBox" class="error-box" role="alert" hidden></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="performance" class="section-block">
+        <div class="section-heading">
+          <div>
+            <h2>Strategy performance</h2>
+            <p>Compare the average evaluation metrics returned by your backend.</p>
+          </div>
+          <span class="small-label">HELD-OUT EVALUATION</span>
+        </div>
+
+        <div class="chart-grid">
+          <article class="panel chart-panel">
+            <div class="chart-heading">
+              <div><h3>Bug detection</h3><p>Average bugs found</p></div>
+              <span class="chart-symbol purple">⌕</span>
+            </div>
+            <div class="chart-container"><canvas id="bugsChart"></canvas></div>
+          </article>
+
+          <article class="panel chart-panel">
+            <div class="chart-heading">
+              <div><h3>Feature coverage</h3><p>Average features covered</p></div>
+              <span class="chart-symbol blue">◈</span>
+            </div>
+            <div class="chart-container"><canvas id="coverageChart"></canvas></div>
+          </article>
+
+          <article class="panel chart-panel">
+            <div class="chart-heading">
+              <div><h3>Total reward</h3><p>Average cumulative reward</p></div>
+              <span class="chart-symbol green">✳</span>
+            </div>
+            <div class="chart-container"><canvas id="rewardChart"></canvas></div>
+          </article>
+
+          <article class="panel chart-panel">
+            <div class="chart-heading">
+              <div><h3>Tests executed</h3><p>Average tests per scenario</p></div>
+              <span class="chart-symbol orange">✓</span>
+            </div>
+            <div class="chart-container"><canvas id="testsChart"></canvas></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section-block">
+        <div class="section-heading">
+          <div>
+            <h2>Detailed results</h2>
+            <p>Numerical comparison of all evaluated strategies.</p>
+          </div>
+        </div>
+        <div class="panel table-panel">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Strategy</th>
+                  <th>Bugs found</th>
+                  <th>Features covered</th>
+                  <th>Tests executed</th>
+                  <th>Budget used</th>
+                  <th>Total reward</th>
+                </tr>
+              </thead>
+              <tbody id="resultsTable">
+                <tr><td colspan="6" class="empty-cell">Loading saved results…</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="table-footnote">Values are averages across the evaluation scenarios. They are not percentages unless explicitly indicated.</p>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <span>TestPilot-RL · Intelligent Software Testing</span>
+        <span>Research prototype · Results depend on the generated scenarios and configuration</span>
+      </footer>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
